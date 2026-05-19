@@ -12,4 +12,6 @@ public class CreateReservationRequest {
     private Long doctorId;
 
     private Long scheduleId;
+
+    private Integer amount;
 }
