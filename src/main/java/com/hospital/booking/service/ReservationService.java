@@ -59,7 +59,8 @@ public class ReservationService {
 
     private String resolvePatientName(Long patientId) {
         try {
-            return userClient.getUserById(patientId).name();
+            String name = userClient.getUserById(patientId).name();
+            return (name != null && !name.isBlank()) ? name : "환자";
         } catch (Exception e) {
             log.warn("[사용자 정보 조회 실패] patientId={}, message={}", patientId, e.getMessage());
             return "환자";
@@ -68,7 +69,8 @@ public class ReservationService {
 
     private String resolveDoctorName(Long doctorId) {
         try {
-            return doctorClient.getDoctorById(doctorId).name();
+            String name = doctorClient.getDoctorById(doctorId).name();
+            return (name != null && !name.isBlank()) ? name : "담당의";
         } catch (Exception e) {
             log.warn("[의사 정보 조회 실패] doctorId={}, message={}", doctorId, e.getMessage());
             return "담당의";
