@@ -1,5 +1,6 @@
 package com.hospital.booking.service;
 
+import com.hospital.booking.client.DoctorClient;
 import com.hospital.booking.client.UserClient;
 import com.hospital.booking.domain.Reservation;
 import com.hospital.booking.dto.CreateReservationRequest;
@@ -21,12 +22,14 @@ public class ReservationService {
     private final ReservationRepository reservationRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final UserClient userClient;
+    private final DoctorClient doctorClient;
 
     @Transactional
     public Reservation createReservation(CreateReservationRequest request) {
         validate(request);
 
         String patientName = resolvePatientName(request.getPatientId());
+        String doctorName  = resolveDoctorName(request.getDoctorId());
 
         Reservation reservation = Reservation.builder()
                 .patientId(request.getPatientId())
@@ -47,7 +50,7 @@ public class ReservationService {
                 saved.getStatus(),
                 saved.getReservationTime(),
                 patientName,
-                "Doctor-" + saved.getDoctorId(),
+                doctorName,
                 saved.getAmount()
         ));
 
@@ -56,10 +59,21 @@ public class ReservationService {
 
     private String resolvePatientName(Long patientId) {
         try {
-            return userClient.getUserById(patientId).name();
+            String name = userClient.getUserById(patientId).name();
+            return (name != null && !name.isBlank()) ? name : "환자";
         } catch (Exception e) {
             log.warn("[사용자 정보 조회 실패] patientId={}, message={}", patientId, e.getMessage());
             return "환자";
+        }
+    }
+
+    private String resolveDoctorName(Long doctorId) {
+        try {
+            String name = doctorClient.getDoctorById(doctorId).name();
+            return (name != null && !name.isBlank()) ? name : "담당의";
+        } catch (Exception e) {
+            log.warn("[의사 정보 조회 실패] doctorId={}, message={}", doctorId, e.getMessage());
+            return "담당의";
         }
     }
 
