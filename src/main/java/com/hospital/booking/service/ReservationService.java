@@ -9,6 +9,7 @@ import com.hospital.booking.repository.ReservationRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,13 +28,14 @@ public class ReservationService {
     private final ApplicationEventPublisher eventPublisher;
     private final UserClient userClient;
     private final DoctorClient doctorClient;
+    private final RabbitTemplate rabbitTemplate;
 
     @Transactional
     public Reservation createReservation(CreateReservationRequest request) {
         validate(request);
 
         String patientName = resolvePatientName(request.getPatientId());
-        String doctorName  = resolveDoctorName(request.getDoctorId());
+        String doctorName = resolveDoctorName(request.getDoctorId());
 
         Reservation reservation = Reservation.builder()
                 .patientId(request.getPatientId())
@@ -57,7 +59,7 @@ public class ReservationService {
                 savedReservation.getReservationTime().toString()
         );
 
-        return saved;
+        return savedReservation;
     }
 
     private String resolvePatientName(Long patientId) {
@@ -65,7 +67,11 @@ public class ReservationService {
             String name = userClient.getUserById(patientId).name();
             return (name != null && !name.isBlank()) ? name : "환자";
         } catch (Exception e) {
-            log.warn("[사용자 정보 조회 실패] patientId={}, message={}", patientId, e.getMessage());
+            log.warn(
+                    "[사용자 정보 조회 실패] patientId={}, message={}",
+                    patientId,
+                    e.getMessage()
+            );
             return "환자";
         }
     }
@@ -75,7 +81,11 @@ public class ReservationService {
             String name = doctorClient.getDoctorById(doctorId).name();
             return (name != null && !name.isBlank()) ? name : "담당의";
         } catch (Exception e) {
-            log.warn("[의사 정보 조회 실패] doctorId={}, message={}", doctorId, e.getMessage());
+            log.warn(
+                    "[의사 정보 조회 실패] doctorId={}, message={}",
+                    doctorId,
+                    e.getMessage()
+            );
             return "담당의";
         }
     }
@@ -113,7 +123,7 @@ public class ReservationService {
                                 )
                         );
 
-        reservation.setStatus("CONFIRMED");
+        reservation.updateStatus("CONFIRMED");
 
         Reservation savedReservation =
                 reservationRepository.save(reservation);
@@ -146,7 +156,7 @@ public class ReservationService {
                                 )
                         );
 
-        reservation.setStatus("CANCELED");
+        reservation.updateStatus("CANCELED");
 
         Reservation savedReservation =
                 reservationRepository.save(reservation);
