@@ -1,4 +1,13 @@
 spring:
+  # 테스트 컨텍스트에서도 JwtDecoder 빈이 생성되도록 jwk-set-uri를 둔다.
+  # jwk-set-uri는 lazy(첫 토큰 검증 시점에 조회)라 contextLoads 단계에서는
+  # 네트워크 호출이 없다 → Keycloak 없이도 테스트 통과. (issuer-uri는 기동 시
+  # 즉시 OIDC discovery를 시도해 CI에서 실패하므로 테스트에선 사용하지 않음)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:0/realms/hospital/protocol/openid-connect/certs
   datasource:
     url: jdbc:h2:mem:booking-test;MODE=MySQL;DB_CLOSE_DELAY=-1
     username: sa
