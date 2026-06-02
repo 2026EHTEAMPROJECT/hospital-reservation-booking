@@ -6,13 +6,18 @@ import com.hospital.booking.domain.Reservation;
 import com.hospital.booking.dto.CreateReservationRequest;
 import com.hospital.booking.event.ReservationCreatedEvent;
 import com.hospital.booking.repository.ReservationRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -23,13 +28,14 @@ public class ReservationService {
     private final ApplicationEventPublisher eventPublisher;
     private final UserClient userClient;
     private final DoctorClient doctorClient;
+    private final RabbitTemplate rabbitTemplate;
 
     @Transactional
     public Reservation createReservation(CreateReservationRequest request) {
         validate(request);
 
         String patientName = resolvePatientName(request.getPatientId());
-        String doctorName  = resolveDoctorName(request.getDoctorId());
+        String doctorName = resolveDoctorName(request.getDoctorId());
 
         Reservation reservation = Reservation.builder()
                 .patientId(request.getPatientId())
@@ -40,21 +46,20 @@ public class ReservationService {
                 .reservationTime(LocalDateTime.now())
                 .build();
 
-        Reservation saved = reservationRepository.save(reservation);
-        log.info("[예약 생성 완료] reservationId={}, status={}", saved.getId(), saved.getStatus());
+        Reservation savedReservation =
+                reservationRepository.save(reservation);
 
-        eventPublisher.publishEvent(new ReservationCreatedEvent(
-                saved.getId(),
-                saved.getPatientId(),
-                saved.getDoctorId(),
-                saved.getStatus(),
-                saved.getReservationTime(),
-                patientName,
-                doctorName,
-                saved.getAmount()
-        ));
+        Map<String, Object> message = new HashMap<>();
+        message.put("reservationId", savedReservation.getId());
+        message.put("patientId", savedReservation.getPatientId());
+        message.put("doctorId", savedReservation.getDoctorId());
+        message.put("status", savedReservation.getStatus());
+        message.put(
+                "reservationTime",
+                savedReservation.getReservationTime().toString()
+        );
 
-        return saved;
+        return savedReservation;
     }
 
     private String resolvePatientName(Long patientId) {
@@ -62,7 +67,11 @@ public class ReservationService {
             String name = userClient.getUserById(patientId).name();
             return (name != null && !name.isBlank()) ? name : "환자";
         } catch (Exception e) {
-            log.warn("[사용자 정보 조회 실패] patientId={}, message={}", patientId, e.getMessage());
+            log.warn(
+                    "[사용자 정보 조회 실패] patientId={}, message={}",
+                    patientId,
+                    e.getMessage()
+            );
             return "환자";
         }
     }
@@ -72,7 +81,11 @@ public class ReservationService {
             String name = doctorClient.getDoctorById(doctorId).name();
             return (name != null && !name.isBlank()) ? name : "담당의";
         } catch (Exception e) {
-            log.warn("[의사 정보 조회 실패] doctorId={}, message={}", doctorId, e.getMessage());
+            log.warn(
+                    "[의사 정보 조회 실패] doctorId={}, message={}",
+                    doctorId,
+                    e.getMessage()
+            );
             return "담당의";
         }
     }
@@ -93,5 +106,71 @@ public class ReservationService {
         if (request.getAmount() == null || request.getAmount() < 0) {
             throw new IllegalArgumentException("amount는 0 이상이어야 합니다.");
         }
+    }
+
+    public List<Reservation> getReservationsByPatient(Long patientId) {
+
+        return reservationRepository.findByPatientId(patientId);
+    }
+
+    public Reservation confirmReservation(Long reservationId) {
+
+        Reservation reservation =
+                reservationRepository.findById(reservationId)
+                        .orElseThrow(() ->
+                                new EntityNotFoundException(
+                                        "예약이 존재하지 않습니다."
+                                )
+                        );
+
+        reservation.updateStatus("CONFIRMED");
+
+        Reservation savedReservation =
+                reservationRepository.save(reservation);
+
+        Map<String, Object> message = new HashMap<>();
+        message.put("reservationId", savedReservation.getId());
+        message.put("status", savedReservation.getStatus());
+
+        rabbitTemplate.convertAndSend(
+                "hospital.exchange",
+                "booking.notification",
+                message
+        );
+
+        return savedReservation;
+    }
+
+    public List<Reservation> getAllReservations() {
+
+        return reservationRepository.findAll();
+    }
+
+    public Reservation cancelReservation(Long reservationId) {
+
+        Reservation reservation =
+                reservationRepository.findById(reservationId)
+                        .orElseThrow(() ->
+                                new EntityNotFoundException(
+                                        "예약이 존재하지 않습니다."
+                                )
+                        );
+
+        reservation.updateStatus("CANCELED");
+
+        Reservation savedReservation =
+                reservationRepository.save(reservation);
+
+        Map<String, Object> message = new HashMap<>();
+        message.put("reservationId", savedReservation.getId());
+        message.put("status", savedReservation.getStatus());
+
+        rabbitTemplate.convertAndSend(
+                "hospital.exchange",
+                "booking.notification",
+                message
+        );
+
+        return savedReservation;
     }
 }
