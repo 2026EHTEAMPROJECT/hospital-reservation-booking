@@ -49,6 +49,19 @@ public class ReservationService {
         Reservation savedReservation =
                 reservationRepository.save(reservation);
 
+        eventPublisher.publishEvent(
+                new ReservationCreatedEvent(
+                        savedReservation.getId(),
+                        savedReservation.getPatientId(),
+                        savedReservation.getDoctorId(),
+                        savedReservation.getStatus(),
+                        savedReservation.getReservationTime(),
+                        patientName,
+                        doctorName,
+                        savedReservation.getAmount()
+                )
+        );
+
         Map<String, Object> message = new HashMap<>();
         message.put("reservationId", savedReservation.getId());
         message.put("patientId", savedReservation.getPatientId());
@@ -130,6 +143,8 @@ public class ReservationService {
 
         Map<String, Object> message = new HashMap<>();
         message.put("reservationId", savedReservation.getId());
+        message.put("patientId", savedReservation.getPatientId());
+        message.put("doctorId", savedReservation.getDoctorId());
         message.put("status", savedReservation.getStatus());
 
         rabbitTemplate.convertAndSend(
@@ -163,6 +178,8 @@ public class ReservationService {
 
         Map<String, Object> message = new HashMap<>();
         message.put("reservationId", savedReservation.getId());
+        message.put("patientId", savedReservation.getPatientId());
+        message.put("doctorId", savedReservation.getDoctorId());
         message.put("status", savedReservation.getStatus());
 
         rabbitTemplate.convertAndSend(
