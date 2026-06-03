@@ -14,6 +14,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.hospital.booking.config.RabbitConfig;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -60,16 +62,6 @@ public class ReservationService {
                         doctorName,
                         savedReservation.getAmount()
                 )
-        );
-
-        Map<String, Object> message = new HashMap<>();
-        message.put("reservationId", savedReservation.getId());
-        message.put("patientId", savedReservation.getPatientId());
-        message.put("doctorId", savedReservation.getDoctorId());
-        message.put("status", savedReservation.getStatus());
-        message.put(
-                "reservationTime",
-                savedReservation.getReservationTime().toString()
         );
 
         return savedReservation;
@@ -126,6 +118,7 @@ public class ReservationService {
         return reservationRepository.findByPatientId(patientId);
     }
 
+    @Transactional
     public Reservation confirmReservation(Long reservationId) {
 
         Reservation reservation =
@@ -135,6 +128,12 @@ public class ReservationService {
                                         "예약이 존재하지 않습니다."
                                 )
                         );
+
+        if (!"WAITING".equals(reservation.getStatus())) {
+            throw new IllegalStateException(
+                    "대기 중인 예약만 확정할 수 있습니다. 현재 상태: " + reservation.getStatus()
+            );
+        }
 
         reservation.updateStatus("CONFIRMED");
 
@@ -148,8 +147,8 @@ public class ReservationService {
         message.put("status", savedReservation.getStatus());
 
         rabbitTemplate.convertAndSend(
-                "hospital.exchange",
-                "booking.notification",
+                RabbitConfig.EXCHANGE,
+                RabbitConfig.BOOKING_NOTIFICATION_KEY,
                 message
         );
 
@@ -161,6 +160,7 @@ public class ReservationService {
         return reservationRepository.findAll();
     }
 
+    @Transactional
     public Reservation cancelReservation(Long reservationId) {
 
         Reservation reservation =
@@ -170,6 +170,12 @@ public class ReservationService {
                                         "예약이 존재하지 않습니다."
                                 )
                         );
+
+        if ("CANCELED".equals(reservation.getStatus())) {
+            throw new IllegalStateException(
+                    "이미 취소된 예약입니다."
+            );
+        }
 
         reservation.updateStatus("CANCELED");
 
@@ -183,8 +189,8 @@ public class ReservationService {
         message.put("status", savedReservation.getStatus());
 
         rabbitTemplate.convertAndSend(
-                "hospital.exchange",
-                "booking.notification",
+                RabbitConfig.EXCHANGE,
+                RabbitConfig.BOOKING_NOTIFICATION_KEY,
                 message
         );
 
