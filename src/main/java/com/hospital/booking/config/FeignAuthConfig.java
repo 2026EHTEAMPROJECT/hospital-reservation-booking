@@ -25,15 +25,19 @@ public class FeignAuthConfig {
     @Bean
     public RequestInterceptor authForwardInterceptor() {
         return template -> {
-            ServletRequestAttributes attributes =
-                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attributes == null) {
-                return;
-            }
-            HttpServletRequest request = attributes.getRequest();
-            String authorization = request.getHeader("Authorization");
-            if (authorization != null && !authorization.isBlank()) {
-                template.header("Authorization", authorization);
+            try {
+                ServletRequestAttributes attributes =
+                        (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+                if (attributes == null) {
+                    return;
+                }
+                HttpServletRequest request = attributes.getRequest();
+                String authorization = request.getHeader("Authorization");
+                if (authorization != null && !authorization.isBlank()) {
+                    template.header("Authorization", authorization);
+                }
+            } catch (IllegalStateException ignored) {
+                // 비-HTTP 컨텍스트(비동기/스케줄러/RabbitMQ)에서는 헤더 릴레이를 생략한다.
             }
         };
     }
