@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -30,7 +29,7 @@ public class ReservationController {
     ) {
         return reservationService.getReservationsByPatient(patientId).stream()
                 .map(ReservationResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @PutMapping("/{reservationId}/confirm")
@@ -51,6 +50,6 @@ public class ReservationController {
     public List<ReservationResponse> getAllReservations() {
         return reservationService.getAllReservations().stream()
                 .map(ReservationResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 }

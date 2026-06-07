@@ -26,6 +26,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ReservationService {
 
+    public static final String STATUS_WAITING   = "WAITING";
+    public static final String STATUS_CONFIRMED = "CONFIRMED";
+    public static final String STATUS_CANCELED  = "CANCELED";
+
     private final ReservationRepository reservationRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final UserClient userClient;
@@ -44,7 +48,7 @@ public class ReservationService {
                 .doctorId(request.getDoctorId())
                 .scheduleId(request.getScheduleId())
                 .amount(request.getAmount())
-                .status("WAITING")
+                .status(STATUS_WAITING)
                 .reservationTime(LocalDateTime.now())
                 .build();
 
@@ -129,28 +133,18 @@ public class ReservationService {
                                 )
                         );
 
-        if (!"WAITING".equals(reservation.getStatus())) {
+        if (!STATUS_WAITING.equals(reservation.getStatus())) {
             throw new IllegalStateException(
                     "대기 중인 예약만 확정할 수 있습니다. 현재 상태: " + reservation.getStatus()
             );
         }
 
-        reservation.updateStatus("CONFIRMED");
+        reservation.updateStatus(STATUS_CONFIRMED);
 
         Reservation savedReservation =
                 reservationRepository.save(reservation);
 
-        Map<String, Object> message = new HashMap<>();
-        message.put("reservationId", savedReservation.getId());
-        message.put("patientId", savedReservation.getPatientId());
-        message.put("doctorId", savedReservation.getDoctorId());
-        message.put("status", savedReservation.getStatus());
-
-        rabbitTemplate.convertAndSend(
-                RabbitConfig.EXCHANGE,
-                RabbitConfig.BOOKING_NOTIFICATION_KEY,
-                message
-        );
+        publishStatusChangeNotification(savedReservation);
 
         return savedReservation;
     }
@@ -171,29 +165,33 @@ public class ReservationService {
                                 )
                         );
 
-        if ("CANCELED".equals(reservation.getStatus())) {
+        if (STATUS_CANCELED.equals(reservation.getStatus())) {
             throw new IllegalStateException(
                     "이미 취소된 예약입니다."
             );
         }
 
-        reservation.updateStatus("CANCELED");
+        reservation.updateStatus(STATUS_CANCELED);
 
         Reservation savedReservation =
                 reservationRepository.save(reservation);
 
+        publishStatusChangeNotification(savedReservation);
+
+        return savedReservation;
+    }
+
+    private void publishStatusChangeNotification(Reservation reservation) {
         Map<String, Object> message = new HashMap<>();
-        message.put("reservationId", savedReservation.getId());
-        message.put("patientId", savedReservation.getPatientId());
-        message.put("doctorId", savedReservation.getDoctorId());
-        message.put("status", savedReservation.getStatus());
+        message.put("reservationId", reservation.getId());
+        message.put("patientId", reservation.getPatientId());
+        message.put("doctorId", reservation.getDoctorId());
+        message.put("status", reservation.getStatus());
 
         rabbitTemplate.convertAndSend(
                 RabbitConfig.EXCHANGE,
                 RabbitConfig.BOOKING_NOTIFICATION_KEY,
                 message
         );
-
-        return savedReservation;
     }
 }
