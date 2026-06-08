@@ -4,6 +4,7 @@ import com.hospital.booking.client.DoctorClient;
 import com.hospital.booking.client.UserClient;
 import com.hospital.booking.domain.Reservation;
 import com.hospital.booking.dto.CreateReservationRequest;
+import com.hospital.booking.dto.RefundRequestMessage;
 import com.hospital.booking.event.ReservationCreatedEvent;
 import com.hospital.booking.repository.ReservationRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -177,8 +178,21 @@ public class ReservationService {
                 reservationRepository.save(reservation);
 
         publishStatusChangeNotification(savedReservation);
+        publishRefundRequest(savedReservation);
 
         return savedReservation;
+    }
+
+    // 예약 취소 시 payment-service 에 환불을 요청한다(결제내역이 없으면 payment 쪽에서 무시).
+    private void publishRefundRequest(Reservation reservation) {
+        rabbitTemplate.convertAndSend(
+                RabbitConfig.EXCHANGE,
+                RabbitConfig.PAYMENT_REFUND_KEY,
+                new RefundRequestMessage(
+                        reservation.getId(),
+                        reservation.getPatientId()
+                )
+        );
     }
 
     private void publishStatusChangeNotification(Reservation reservation) {
