@@ -37,6 +37,9 @@ public class Reservation {
     @Column(length = 20)
     private String status;
 
+    // 확정(CONFIRMED) 받은 예약을 고객 본인이 취소한 경우 true. 어드민의 WAITING 거절 취소와 구분하기 위함.
+    private Boolean selfCanceled;
+
     private LocalDateTime reservationTime;
 
     @CreatedDate
@@ -45,5 +48,9 @@ public class Reservation {
 
     public void updateStatus(String status) {
         this.status = status;
+    }
+
+    public void markSelfCanceled() {
+        this.selfCanceled = true;
     }
 }

@@ -179,6 +179,12 @@ public class ReservationService {
             );
         }
 
+        // 어드민은 WAITING 상태만 거절 취소하고, CONFIRMED 예약의 취소는 고객 본인만 한다.
+        // 따라서 취소 직전 상태가 CONFIRMED 였으면 "자체취소"로 표시한다.
+        if (STATUS_CONFIRMED.equals(reservation.getStatus())) {
+            reservation.markSelfCanceled();
+        }
+
         reservation.updateStatus(STATUS_CANCELED);
 
         Reservation savedReservation =
