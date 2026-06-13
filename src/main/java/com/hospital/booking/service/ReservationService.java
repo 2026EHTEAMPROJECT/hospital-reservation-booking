@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.hospital.booking.config.RabbitConfig;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +49,8 @@ public class ReservationService {
                 .scheduleId(request.getScheduleId())
                 .amount(request.getAmount())
                 .status(STATUS_WAITING)
-                .reservationTime(LocalDateTime.now())
+                // 환자가 고른 진료 예약 일시를 그대로 저장한다(과거엔 now() 로 박혀 선택 시각이 버려졌다).
+                .reservationTime(request.getAppointmentTime())
                 .build();
 
         Reservation savedReservation =
@@ -110,8 +110,8 @@ public class ReservationService {
         if (request.getDoctorId() == null) {
             throw new IllegalArgumentException("doctorId는 null일 수 없습니다.");
         }
-        if (request.getScheduleId() == null) {
-            throw new IllegalArgumentException("scheduleId는 null일 수 없습니다.");
+        if (request.getAppointmentTime() == null) {
+            throw new IllegalArgumentException("appointmentTime(예약 일시)은 null일 수 없습니다.");
         }
         if (request.getAmount() == null || request.getAmount() < 0) {
             throw new IllegalArgumentException("amount는 0 이상이어야 합니다.");
