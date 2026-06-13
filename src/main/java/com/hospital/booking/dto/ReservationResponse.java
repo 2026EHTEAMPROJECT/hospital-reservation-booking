@@ -14,7 +14,8 @@ public record ReservationResponse(
         Integer amount,
         String status,
         LocalDateTime reservationTime,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        Boolean selfCanceled
 ) {
     public static ReservationResponse from(Reservation reservation) {
         return new ReservationResponse(
@@ -27,7 +28,8 @@ public record ReservationResponse(
                 reservation.getAmount(),
                 reservation.getStatus(),
                 reservation.getReservationTime(),
-                reservation.getCreatedAt()
+                reservation.getCreatedAt(),
+                reservation.getSelfCanceled()
         );
     }
 }
