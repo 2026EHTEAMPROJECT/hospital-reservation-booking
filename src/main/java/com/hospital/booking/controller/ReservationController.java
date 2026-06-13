@@ -5,6 +5,7 @@ import com.hospital.booking.dto.ReservationResponse;
 import com.hospital.booking.service.ReservationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,6 +45,14 @@ public class ReservationController {
             @PathVariable Long reservationId
     ) {
         return ReservationResponse.from(reservationService.cancelReservation(reservationId));
+    }
+
+    @DeleteMapping("/{reservationId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteReservation(
+            @PathVariable Long reservationId
+    ) {
+        reservationService.deleteReservation(reservationId);
     }
 
     @GetMapping

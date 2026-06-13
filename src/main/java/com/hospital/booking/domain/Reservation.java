@@ -24,6 +24,12 @@ public class Reservation {
 
     private Long doctorId;
 
+    @Column(length = 50)
+    private String patientName;
+
+    @Column(length = 50)
+    private String doctorName;
+
     private Long scheduleId;
 
     private Integer amount;

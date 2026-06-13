@@ -3,6 +3,7 @@ package com.hospital.booking.service;
 import com.hospital.booking.client.DoctorClient;
 import com.hospital.booking.client.UserClient;
 import com.hospital.booking.domain.Reservation;
+import com.hospital.booking.dto.BookingNotificationMessage;
 import com.hospital.booking.dto.CreateReservationRequest;
 import com.hospital.booking.dto.RefundRequestMessage;
 import com.hospital.booking.event.ReservationCreatedEvent;
@@ -17,9 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.hospital.booking.config.RabbitConfig;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -29,6 +28,7 @@ public class ReservationService {
     public static final String STATUS_WAITING   = "WAITING";
     public static final String STATUS_CONFIRMED = "CONFIRMED";
     public static final String STATUS_CANCELED  = "CANCELED";
+    public static final String STATUS_REFUNDED  = "REFUNDED";
 
     private final ReservationRepository reservationRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -46,6 +46,8 @@ public class ReservationService {
         Reservation reservation = Reservation.builder()
                 .patientId(request.getPatientId())
                 .doctorId(request.getDoctorId())
+                .patientName(patientName)
+                .doctorName(doctorName)
                 .scheduleId(request.getScheduleId())
                 .amount(request.getAmount())
                 .status(STATUS_WAITING)
@@ -183,6 +185,27 @@ public class ReservationService {
         return savedReservation;
     }
 
+    // 취소·환불 완료된 예약만 화면에서 영구 삭제할 수 있다(진행 중 예약은 삭제 불가).
+    @Transactional
+    public void deleteReservation(Long reservationId) {
+        Reservation reservation =
+                reservationRepository.findById(reservationId)
+                        .orElseThrow(() ->
+                                new EntityNotFoundException(
+                                        "예약이 존재하지 않습니다."
+                                )
+                        );
+
+        String status = reservation.getStatus();
+        if (!STATUS_CANCELED.equals(status) && !STATUS_REFUNDED.equals(status)) {
+            throw new IllegalStateException(
+                    "취소 또는 환불된 예약만 삭제할 수 있습니다. 현재 상태: " + status
+            );
+        }
+
+        reservationRepository.delete(reservation);
+    }
+
     // 예약 취소 시 payment-service 에 환불을 요청한다(결제내역이 없으면 payment 쪽에서 무시).
     private void publishRefundRequest(Reservation reservation) {
         rabbitTemplate.convertAndSend(
@@ -196,11 +219,20 @@ public class ReservationService {
     }
 
     private void publishStatusChangeNotification(Reservation reservation) {
-        Map<String, Object> message = new HashMap<>();
-        message.put("reservationId", reservation.getId());
-        message.put("patientId", reservation.getPatientId());
-        message.put("doctorId", reservation.getDoctorId());
-        message.put("status", reservation.getStatus());
+        // 확정/취소 알림에도 환자·담당의 이름과 예약 일시를 담아 보낸다(과거엔 ID만 보내 이름이 비어 있었다).
+        String reservationTime = reservation.getReservationTime() != null
+                ? reservation.getReservationTime().toString()
+                : null;
+
+        BookingNotificationMessage message = new BookingNotificationMessage(
+                reservation.getId(),
+                reservation.getPatientId(),
+                reservation.getDoctorId(),
+                reservation.getStatus(),
+                reservationTime,
+                reservation.getPatientName(),
+                reservation.getDoctorName()
+        );
 
         rabbitTemplate.convertAndSend(
                 RabbitConfig.EXCHANGE,
