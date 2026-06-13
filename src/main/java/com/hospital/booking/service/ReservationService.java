@@ -13,12 +13,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.hospital.booking.config.RabbitConfig;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -187,7 +192,7 @@ public class ReservationService {
 
     // 취소·환불 완료된 예약만 화면에서 영구 삭제할 수 있다(진행 중 예약은 삭제 불가).
     @Transactional
-    public void deleteReservation(Long reservationId) {
+    public void deleteReservation(Long reservationId, Jwt jwt) {
         Reservation reservation =
                 reservationRepository.findById(reservationId)
                         .orElseThrow(() ->
@@ -203,7 +208,30 @@ public class ReservationService {
             );
         }
 
+        // IDOR 방지: 본인 예약만 삭제할 수 있다(삭제는 복구 불가). ADMIN 은 전체 허용.
+        // 요청자의 JWT 를 user-service /me 로 릴레이(FeignAuthConfig)해 본인 로컬 id 를 얻어 대조.
+        if (!hasAdminRole(jwt)) {
+            Long callerId = userClient.getMe().id();
+            if (callerId == null || !callerId.equals(reservation.getPatientId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN, "본인 예약만 삭제할 수 있습니다."
+                );
+            }
+        }
+
         reservationRepository.delete(reservation);
+    }
+
+    private boolean hasAdminRole(Jwt jwt) {
+        if (jwt == null) {
+            return false;
+        }
+        Object realmAccess = jwt.getClaim("realm_access");
+        if (realmAccess instanceof Map<?, ?> ra
+                && ra.get("roles") instanceof Collection<?> roles) {
+            return roles.contains("ADMIN");
+        }
+        return false;
     }
 
     // 예약 취소 시 payment-service 에 환불을 요청한다(결제내역이 없으면 payment 쪽에서 무시).
