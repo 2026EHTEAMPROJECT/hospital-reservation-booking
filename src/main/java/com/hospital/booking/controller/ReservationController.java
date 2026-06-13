@@ -6,6 +6,8 @@ import com.hospital.booking.service.ReservationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -50,9 +52,10 @@ public class ReservationController {
     @DeleteMapping("/{reservationId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteReservation(
-            @PathVariable Long reservationId
+            @PathVariable Long reservationId,
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        reservationService.deleteReservation(reservationId);
+        reservationService.deleteReservation(reservationId, jwt);
     }
 
     @GetMapping
